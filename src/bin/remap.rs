@@ -98,6 +98,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut ms = Vec::new(); metas(&mod_dir, &mut ms);
     let mut per_chunk: HashMap<u32, Vec<PackageResourceBuilder>> = HashMap::new();
     let mut matched: HashMap<&str, usize> = HashMap::new();
+    let mut idmap: serde_json::Map<String, Value> = serde_json::Map::new(); // mod_hash -> mac_id
     let mut not_win=0usize; let mut no_mac=0usize;
     for m in &ms {
         let v: Value = serde_json::from_str(&fs::read_to_string(m)?)?;
@@ -119,6 +120,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut res = PackageResourceBuilder::from_memory(y, key, pt, None, false)?;
         for (rr, fl) in &refs { res.with_reference(*rr, *fl); }
         per_chunk.entry(chunk).or_default().push(res);
+        idmap.insert(v["hash_value"].as_str().unwrap().to_string(), Value::String(y.to_hex_string()));
         *matched.entry(key).or_default() += 1;
     }
     for t in TYPES { eprintln!("remapeados {}: {}", t, matched.get(t).copied().unwrap_or(0)); }
@@ -144,5 +146,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     println!("\nTotal: {} recursos em {} chunks.", total, chunks.len());
     println!("Chunks p/ subir patchlevel=2: {:?}", chunks);
+    // mapa ID-mod -> ID-Mac (permite reconstruir sem o Windows depois)
+    fs::write(out.join("idmap.json"), serde_json::to_string(&Value::Object(idmap.clone()))?)?;
+    println!("Mapa de IDs salvo em idmap.json ({} pares)", idmap.len());
     Ok(())
 }
