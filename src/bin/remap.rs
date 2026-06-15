@@ -16,7 +16,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const META: &str = ".meta.json";
-const TYPES: [&str; 2] = ["LOCR", "DLGE"]; // RTLV excluido (blob difere entre plataformas)
+const TYPES: [&str; 3] = ["LOCR", "DLGE", "RTLV"];
+// RTLV embute o ID de referencia (video) inline no blob, nos bytes [152..160].
+// Esse e o UNICO ponto que difere entre Windows e Mac, entao mascaramos pra parear
+// e depois trocamos pelo ID-Mac no blob PT.
+const RTLV_OFF: usize = 152;
+const RTLV_END: usize = 160;
 
 fn metas(dir: &Path, out: &mut Vec<PathBuf>) {
     if let Ok(rd) = fs::read_dir(dir) {
@@ -37,6 +42,7 @@ fn chunk_of(fname: &str) -> Option<u32> {
 }
 
 type Refs = Vec<(RuntimeResourceID, ResourceReferenceFlags)>;
+type MacVal = (RuntimeResourceID, u32, Refs, Option<Vec<u8>>); // (id, chunk, refs, RTLV video id)
 
 fn main() -> Result<(), Box<dyn Error>> {
     let a: Vec<String> = std::env::args().collect();
@@ -56,21 +62,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         None
     };
 
-    // 2) Mac: por tipo, conteudo ingles -> (ID-Mac, chunk, refs). Versao mais recente.
-    let mut mac_maps: HashMap<&str, HashMap<Vec<u8>, (RuntimeResourceID,u32,Refs)>> = HashMap::new();
+    // 2) Mac: por tipo, conteudo ingles -> (ID-Mac, chunk, refs, video_id p/ RTLV).
+    // Chave = blob; p/ RTLV mascaramos os bytes [152..160] (ID embutido) na chave.
+    let mut mac_maps: HashMap<&str, HashMap<Vec<u8>, MacVal>> = HashMap::new();
     for t in TYPES { mac_maps.insert(t, HashMap::new()); }
     let mut macfiles = rpkgs(&mac); macfiles.sort(); macfiles.reverse();
     for p in &macfiles {
         let fname = p.file_name().unwrap().to_string_lossy().to_string();
-        if fname == "chunk0patch2.rpkg" { continue; } // ignora patch instalado por nos
+        if fname.ends_with("patch2.rpkg") { continue; } // ignora NOSSOS patches instalados
         let chunk = match chunk_of(&fname) { Some(c)=>c, None=>continue };
         if let Ok(pk) = ResourcePackage::from_file(p) {
             for (rrid, info) in pk.resources().iter() {
                 let ty = info.data_type();
                 let key = match TYPES.iter().find(|t| **t==ty) { Some(t)=>*t, None=>continue };
                 if let Ok(d) = pk.read_resource(rrid) {
-                    mac_maps.get_mut(key).unwrap().entry(d)
-                        .or_insert_with(|| (*rrid, chunk, info.references().clone()));
+                    let (mapkey, vid) = if key=="RTLV" && d.len()>=RTLV_END {
+                        let mut k=d.clone(); for b in &mut k[RTLV_OFF..RTLV_END] { *b=0; }
+                        (k, Some(d[RTLV_OFF..RTLV_END].to_vec()))
+                    } else { (d, None) };
+                    mac_maps.get_mut(key).unwrap().entry(mapkey)
+                        .or_insert_with(|| (*rrid, chunk, info.references().clone(), vid));
                 }
             }
         }
@@ -88,9 +99,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         let key = match TYPES.iter().find(|t| **t==ty) { Some(t)=>*t, None=>continue };
         let x = RuntimeResourceID::from_hex_string(v["hash_value"].as_str().unwrap())?;
         let eng = match read_win(&x) { Some(e)=>e, None=>{not_win+=1; continue;} };
-        let (y, chunk, refs) = match mac_maps[key].get(&eng) { Some(t)=>t.clone(), None=>{no_mac+=1; continue;} };
+        // p/ RTLV: pareia pelo blob com o ID embutido [152..160] mascarado
+        let lookup = if key=="RTLV" && eng.len()>=RTLV_END {
+            let mut k=eng.clone(); for b in &mut k[RTLV_OFF..RTLV_END] { *b=0; } k
+        } else { eng };
+        let (y, chunk, refs, vid) = match mac_maps[key].get(&lookup) { Some(t)=>t.clone(), None=>{no_mac+=1; continue;} };
         let s = m.to_string_lossy(); let pt_path = PathBuf::from(&s[..s.len()-META.len()]);
-        let pt = fs::read(&pt_path)?;
+        let mut pt = fs::read(&pt_path)?;
+        // p/ RTLV: troca o ID-Windows embutido pelo ID-Mac (do original Mac pareado)
+        if key=="RTLV" {
+            if let Some(vb)=&vid { if pt.len()>=RTLV_END { pt[RTLV_OFF..RTLV_END].copy_from_slice(vb); } }
+        }
         let mut res = PackageResourceBuilder::from_memory(y, key, pt, None, false)?;
         for (rr, fl) in &refs { res.with_reference(*rr, *fl); }
         per_chunk.entry(chunk).or_default().push(res);

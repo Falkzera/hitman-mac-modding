@@ -59,3 +59,11 @@ Primeiro teste: trocar só o `chunk0patch2.rpkg` (597 LOCR de menu) pelo remapea
 ## 7. Por que NÃO mexemos no `partitionmap.txt`
 
 Suspeitávamos que o `partitionmap.txt` (manifesto com md5 por chunk) precisasse listar o novo patch. Não precisou: a engine descobre os patches pelo padrão de nome `chunkNpatch{M}.rpkg` governado pelo `patchlevel` do `packagedefinition`. O menu traduzido sem tocar no partitionmap confirmou isso.
+
+## 8. RTLV (legendas de cutscene) — o caso especial
+
+No bridge inicial, **RTLV casou 0/132** — diferente de DLGE (que casa quase 100%). Investigando (ferramenta `rtlv`), comparamos o RTLV inglês do Windows com o do Mac do mesmo tamanho: **diferem em só ~7 bytes, sempre no offset 152–159**. Ou seja, o RTLV **embute o ID de referência (o vídeo da cutscene, `refs=1`) *inline* no blob**, nos bytes 152–159 — e esse ID, claro, difere entre Windows e Mac.
+
+Solução: parear RTLV Windows↔Mac pelo blob **com os bytes 152–159 mascarados** (zerados), e no blob PT do mod **trocar os bytes 152–159 pelo ID-Mac** do vídeo (lido do RTLV original do Mac pareado). Resultado: **128/132** (3 colidem em conteúdo idêntico, 1 não casa). Por que DLGE não tinha esse problema? As referências do DLGE ficam no *meta* (tabela separada), não embutidas no blob.
+
+Lição: "não casa por conteúdo" nem sempre significa "incompatível" — pode ser uma diferença **localizada** (um ID embutido) que dá pra cirurgicamente remapear.

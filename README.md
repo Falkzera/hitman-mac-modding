@@ -60,8 +60,8 @@ Assim nunca precisamos "quebrar" o hash da Feral — usamos o conteúdo como cha
 |---|---|
 | **LOCR** (menus/UI/texto) | 639 / 648 (98,6%) |
 | **DLGE** (legendas de diálogo) | 17.426 / 17.448 (99,87%) |
-| RTLV (legendas de cutscene) | 0 / 132 — *o blob difere entre plataformas; fica em inglês* |
-| **Total** | **18.065 / 18.228 (99,1%)** |
+| **RTLV** (legendas de cutscene) | 128 / 132 — *o blob embute o ID do vídeo nos bytes 152–159; remapeamos esse ID* |
+| **Total** | **~18.193 / 18.228 (99,8%)** |
 
 Para DLGE (que referenciam áudio/animação), o patch usa o **blob de texto PT do mod** + a **tabela de referências do original do Mac** (os IDs de referência corretos do Mac). Validado: 18.065 recursos + 69.964 referências, **todos** existentes no jogo de Mac.
 
@@ -134,7 +134,7 @@ No teste do autor, **o jogo conectou online normalmente** com o mod instalado �
 
 ## Limitações
 
-- **Legendas de cutscene (RTLV, 132)** ficam em inglês — o blob desses recursos difere entre Windows e Mac, então não há ponte por conteúdo (0,7% do mod).
+- **Legendas de cutscene (RTLV):** 128/132 traduzidas. O blob do RTLV embute *inline* o ID do vídeo (bytes 152–159), que difere entre plataformas — nós remapeamos esse ID. Sobram ~35 recursos (alguns LOCR/DLGE/RTLV) que não casam por conteúdo e ficam em inglês (~0,2% do mod).
 - **Específico da build 23678892.** Outra versão do jogo/mod exige regerar os patches (mesmo procedimento).
 - **Updates da Steam revertem o mod** — rode `./install.sh` de novo depois.
 - **Precisa dos arquivos Windows** para gerar (veja Roadmap).
