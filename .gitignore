@@ -1,0 +1,12 @@
+# Rust build
+/target
+
+# Generated patches / working artifacts (DERIVED from the mod + game data — never commit)
+/build
+*.rpkg
+
+# macOS
+.DS_Store
+
+# Backups
+HitmanModBackup/
