@@ -9,7 +9,10 @@ PD="$RES/packagedefinition.txt"
 [ -d "$RES" ] || { echo "Resources nao encontrado: $RES"; exit 1; }
 [ -d "$FULL" ] || { echo "patches nao encontrados: $FULL"; exit 1; }
 
-echo "Copiando $(ls "$FULL"/*.rpkg | wc -l | tr -d ' ') patches..."
+# Guardrail: nunca instalar vazio (evita apagar a traducao por engano).
+N=$(ls "$FULL"/*.rpkg 2>/dev/null | wc -l | tr -d ' ')
+[ "$N" -gt 0 ] || { echo "ERRO: nenhum .rpkg em $FULL — abortando (nada a instalar)."; exit 1; }
+echo "Copiando $N patches..."
 cp "$FULL"/*.rpkg "$RES/"
 
 echo "Subindo patchlevel=2 nas particoes dos chunks com patch..."

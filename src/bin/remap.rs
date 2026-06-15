@@ -16,7 +16,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const META: &str = ".meta.json";
-const TYPES: [&str; 3] = ["LOCR", "DLGE", "RTLV"];
+// RTLV temporariamente DESLIGADO: o remap do ID embutido causou crash em cutscene.
+// Volta ao conjunto estável (menus + diálogo). RTLV em investigação.
+const TYPES: [&str; 2] = ["LOCR", "DLGE"];
 // RTLV embute o ID de referencia (video) inline no blob, nos bytes [152..160].
 // Esse e o UNICO ponto que difere entre Windows e Mac, entao mascaramos pra parear
 // e depois trocamos pelo ID-Mac no blob PT.
@@ -57,6 +59,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut win_pkgs: Vec<ResourcePackage> = Vec::new();
     for p in &wf { if let Ok(pk)=ResourcePackage::from_file(p){ win_pkgs.push(pk);} }
     eprintln!("win pacotes: {}", win_pkgs.len());
+    if win_pkgs.is_empty() {
+        eprintln!("ERRO: nenhum pacote Windows em {}.\nO content-bridge precisa dos arquivos Runtime/ do jogo Windows (Pedra de Roseta). Abortando.", win.display());
+        std::process::exit(1);
+    }
     let read_win = |rrid: &RuntimeResourceID| -> Option<Vec<u8>> {
         for pk in &win_pkgs { if pk.resources().contains_key(rrid) { if let Ok(d)=pk.read_resource(rrid){return Some(d);} } }
         None
@@ -117,6 +123,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     for t in TYPES { eprintln!("remapeados {}: {}", t, matched.get(t).copied().unwrap_or(0)); }
     eprintln!("nao-no-Windows: {} | sem-ID-Mac: {}", not_win, no_mac);
+    if per_chunk.is_empty() {
+        eprintln!("ERRO: 0 recursos remapeados — nada a gerar (Windows ausente ou build divergente?). Abortando.");
+        std::process::exit(1);
+    }
 
     // 4) um chunkNpatch2.rpkg por chunk (chunk28=dugong eh addon; resto standard)
     let mut chunks: Vec<u32> = per_chunk.keys().copied().collect(); chunks.sort();
